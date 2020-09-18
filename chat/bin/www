@@ -1,0 +1,153 @@
+#!/usr/bin/env node
+
+/**
+ * Module dependencies.
+ */
+
+var app = require('../app');
+var debug = require('debug')('chat:server');
+var http = require('http');
+const ws = require("../wslib");
+
+const fs = require("fs");
+const express = require("express");
+const exApp = express();
+const bodyparser = require("body-parser");
+const { stringify } = require('querystring');
+exApp.use(bodyparser.json());
+/**
+ * Get port from environment and store in Express.
+ */
+
+var port = normalizePort(process.env.PORT || '8080');
+app.set('port', port);
+
+/**
+ * Create HTTP server.
+ */
+
+var server = http.createServer(app);
+ws.wsConnection(server);
+
+/**
+ * Listen on provided port, on all network interfaces.
+ */
+
+server.listen(port);
+server.on('error', onError);
+server.on('listening', onListening);
+
+/**
+ * Normalize a port into a number, string, or false.
+ */
+
+function normalizePort(val) {
+  var port = parseInt(val, 10);
+
+  if (isNaN(port)) {
+    // named pipe
+    return val;
+  }
+
+  if (port >= 0) {
+    // port number
+    return port;
+  }
+
+  return false;
+}
+
+/**
+ * Event listener for HTTP server "error" event.
+ */
+
+function onError(error) {
+  if (error.syscall !== 'listen') {
+    throw error;
+  }
+
+  var bind = typeof port === 'string'
+    ? 'Pipe ' + port
+    : 'Port ' + port;
+
+  // handle specific listen errors with friendly messages
+  switch (error.code) {
+    case 'EACCES':
+      console.error(bind + ' requires elevated privileges');
+      process.exit(1);
+      break;
+    case 'EADDRINUSE':
+      console.error(bind + ' is already in use');
+      process.exit(1);
+      break;
+    default:
+      throw error;
+  }
+}
+
+/**
+ * Event listener for HTTP server "listening" event.
+ */
+
+function onListening() {
+  var addr = server.address();
+  var bind = typeof addr === 'string'
+    ? 'pipe ' + addr
+    : 'port ' + addr.port;
+  debug('Listening on ' + bind);
+}
+
+//-----------------------------------------------------
+
+exApp.listen(3000, ()=>{
+  console.log("Listening on port 3000");
+});
+
+exApp.get("/chat/api/messages", (req, res)=>{
+  fs.readFile("./data.json", (err, data) =>{
+    if (err) return res.status(404).send(err);
+    res.send(JSON.parse(data));
+  });
+});
+
+exApp.get("/chat/api/messages/:ts", (req, res)=>{
+  fs.readFile("./data.json", (err, data) =>{
+    jsonData = JSON.parse(data);
+    const message = jsonData.find(element => element.ts == parseInt(req.params.ts));
+    if (!message) return res.status(404).send("Error");
+    res.send(message);
+  });
+});
+
+exApp.post("/chat/api/messages", (req, res)=>{
+  const message = req.body;
+  fs.readFile("./data.json", (err, data) =>{
+    jsonData = JSON.parse(data);
+    jsonData.push(message);
+    fs.writeFile("../data.json", JSON.stringify(jsonData),err=>{});
+    res.send(message);
+  });
+});
+
+exApp.put("/chat/api/messages/:ts", (req, res)=>{
+  const message = req.body;
+  fs.readFile("./data.json", (err, data) =>{
+    jsonData = JSON.parse(data);
+    const oldMessage = jsonData.find(element => element.ts == parseInt(req.params.ts));
+    oldMessage.message = message.message;
+    oldMessage.author = message.author;
+    fs.writeFile("../data.json", JSON.stringify(jsonData),err=>{});
+    res.send(message);
+  });
+});
+
+exApp.delete("/chat/api/messages/:ts", (req, res)=>{
+  fs.readFile("./data.json", (err, data) =>{
+    jsonData = JSON.parse(data);
+    const message = jsonData.find(element => element.ts == parseInt(req.params.ts));
+    const index = jsonData.indexOf(message);
+    jsonData.splice(index,1);
+    fs.writeFile("../data.json", JSON.stringify(jsonData),err=>{});
+    res.send(message);
+  });
+});
